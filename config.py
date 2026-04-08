@@ -143,17 +143,33 @@ def visualize_faces_on_mesh(shape, faces_list, selected_face_ids, mesh_deflectio
     plotter.show()
 
 
-def save_shape_to_step(shape: TopoDS_Shape, path: str):
-
+def save_shape_to_step(shape: TopoDS_Shape, path: str) -> None:
     writer = STEPControl_Writer()
     writer.Transfer(shape, STEPControl_AsIs)
     status = writer.Write(path)
 
 
+def save_shape_to_stl(
+    shape: TopoDS_Shape,
+    path: str,
+    mesh_deflection: float = 0.001,
+    angular_deflection: float = 0.5,
+) -> None:
+    """Tessellate a TopoDS_Shape and save it as an STL file using OCC StlAPI."""
+    from OCP.BRepMesh import BRepMesh_IncrementalMesh
+    from OCP.StlAPI import StlAPI_Writer
+
+    BRepMesh_IncrementalMesh(shape, mesh_deflection, False, angular_deflection, True).Perform()
+    writer = StlAPI_Writer()
+    writer.ASCIIMode = False   # binary STL
+    writer.Write(shape, path)
+    print(f"Saved STL: {path}")
+
+
 def step_to_stl(
     step_path: str,
     stl_path: Optional[str] = None,
-    mesh_deflection: float = 0.001,
+    mesh_deflection: float = 0.1,
     angular_deflection: float = 0.5,
 ) -> str:
 
