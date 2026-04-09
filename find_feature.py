@@ -51,7 +51,7 @@ def main() -> int:
     stock_path = args.stock
 
     # Load part and stock shapes
-    shape, faces_list = read_step_from_user(step_path)  
+    shape, faces_list = read_step_from_user(step_path)
     stock_shape, _ = read_step_from_user(stock_path)
     
     # Build face adjacency graph
@@ -66,31 +66,20 @@ def main() -> int:
 
     # Find free-form feature
     feature_faces = grow_region(G, face_id)
-
-    # get feature bounding box
-    feature_bbox = bounding_box(feature_faces, faces_list=faces_list)
-    print(feature_bbox)
-
-    # build solid box from feature XY, feature Zmin, and stock Zmax
-    feature_box = build_feature_box_from_bbox(feature_bbox, stock_shape)
-    save_shape_to_step(feature_box, "feature_bbox_solid.step")
-
+    
     # visualize feature faces
-    visualize_faces_on_mesh(shape, faces_list, feature_faces)
+    # visualize_faces_on_mesh(shape, faces_list, feature_faces)
+
+    # get feature bounding box from BRep feature faces
+    feature_bbox = bounding_box(feature_faces, faces_list=faces_list)
+
+    # build mesh box from feature XY extents + stock Zmax, saved as STL
+    feature_box = build_feature_box_from_bbox(feature_bbox, stock_shape, output_path="feature_bbox_solid.stl")
 
 
     # Build feature removal volume
 
 
-    # removal_shape = compute_removal_volume(stock_shape, shape)
-    # boundary_edges = get_feature_boundary_edges(G, faces_list, feature_faces)
-    # feature_removal = clip_to_feature_footprint(
-    #     removal_shape,
-    #     boundary_edges,
-    #     direction=(0, 0, 1),  # machining direction
-    #     length=200,
-    # )
-    # save_shape_to_step(feature_removal, args.out)
     return 0
 
 if __name__ == "__main__":
