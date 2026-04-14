@@ -195,4 +195,15 @@ def build_feature_removal_volume(extrusion, stock, part, output_path: str = "fea
     return result.export(output_path)
 
 
+def save_shape_to_stl(shape: TopoDS_Shape, path: str):
+    writer = StlAPI_Writer()
+    writer.Write(shape, path)
+
+def save_shape_to_step(shape: TopoDS_Shape, path: str):
+    writer = STEPControl_Writer()
+    writer.Transfer(shape, STEPControl_AsIs)
+    status = writer.Write(path)
+
+
+
 

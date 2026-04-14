@@ -3,14 +3,17 @@ from collections import deque
 import networkx as nx
 from typing import Set
 
+
+
 from geometry_utils import *
 from graph import *
-from remove_feature_bbox import *
 from extrude_feature import *
 
 def grow_region(G: nx.Graph, seed_face_id: int, angle_threshold: float = 40.0) -> Set[int]:
+
     def is_plane(node_id: int) -> bool:
         return G.nodes[node_id].get("surface_type") == "Plane"
+
     region: Set[int] = set()
     queue: deque[int] = deque([seed_face_id])
     while queue:
@@ -32,14 +35,16 @@ def grow_region(G: nx.Graph, seed_face_id: int, angle_threshold: float = 40.0) -
             queue.append(nbr)
     return region
 
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Detect free-form feature, extrude it, and intersect with stock removal volume."
     )
-    parser.add_argument("--step", required=True, help="Path to finished part STEP file")
+    parser.add_argument("--part", required=True, help="Path to finished part STEP file")
     parser.add_argument("--stock", required=True, help="Path to stock STEP file")
     parser.add_argument(
-        "--direction",
+        "--dir",
         required=True,
         nargs=3,
         type=float,
@@ -53,11 +58,9 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    step_path = args.step
+    step_path = args.part
     stock_path = args.stock
-    direction = tuple(args.direction)
-
-    
+    direction = tuple(args.dir)
 
     # Load part and stock shapes
     shape, faces_list = read_step_from_user(step_path)
@@ -77,35 +80,25 @@ def main() -> int:
     feature_faces = grow_region(G, face_id)
     detected_patch_faces = [faces_list[i] for i in feature_faces]
 
-
-    # visualize feature faces
+    # # visualize selected feature faces
     # visualize_faces_on_mesh(shape, faces_list, feature_faces)
 
-    # get stock's bounding box from BRep feature faces
-    stock_bbox = Bnd_Box()
-    BRepBndLib.Add_s(stock_shape, stock_bbox)
-    xmin_stock, ymin_stock, zmin_stock, xmax_stock, ymax_stock, zmax_stock = stock_bbox.Get()
-    if direction == (0,0,1) or direction == (0,0,-1):
-        extrusion_length = zmax_stock - zmin_stock
-    elif direction == (0,1,0) or direction == (0,-1,0):
-        extrusion_length = ymax_stock - ymin_stock
-    elif direction == (1,0,0) or direction == (-1,0,0):
-        extrusion_length = xmax_stock - xmin_stock
-    # feature_bbox = bounding_box(feature_faces, faces_list=faces_list)
-    # extrusion_length += feature_bbox["z"][1] - feature_bbox["z"][0]
-    # print(f"Extrusion length: {extrusion_length}")
+    # get stock's bounding box to set extrusion length
+    extrusion_length = get_extrusion_length(stock_shape, direction)
 
+    # extrude feature faces
     removal_prism = extrude_feature_patch(
         detected_patch_faces,
-        direction,   # machining direction
+        direction,   
         length=extrusion_length,          # large enough to reach stock top
     )
 
-    # Visualize the extrusion
+    # # Visualize the extrusion
     # feature_mesh = build_mesh_for_shape(removal_prism, mesh_deflection=0.001)
     # plotter = pv.Plotter()
     # plotter.add_mesh(feature_mesh, color="gray")
     # plotter.show()
+
 
     # build_feature_removal_volume(removal_mesh, stock_mesh, part_mesh) #ERROR HERE if convert to mesh before boolean operations
 
@@ -117,13 +110,19 @@ def main() -> int:
         extrusion=removal_prism,
     )
 
-
     # Export intersected feature removal to STEP
     output_step = args.out
     save_shape_to_step(feature_removal, output_step)
     print(f"Feature removal volume saved to STEP file: {output_step}")
 
+    # visualize feature removal volume
     visualize_feature_removal_volume(removal_prism, feature_removal, shape)
+
+    return 0
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+
 
     # bbox = Bnd_Box()
     # BRepBndLib.Add_s(stock_shape, bbox)
@@ -135,8 +134,7 @@ def main() -> int:
     #     "z": (zmin, zmax),
     # }
 
-    # visualize feature faces
-    # visualize_faces_on_mesh(shape, faces_list, feature_faces)
+   
 
 
 
@@ -163,7 +161,3 @@ def main() -> int:
     #     plotter = pv.Plotter()
     #     plotter.add_mesh(feature_mesh, color="gray")
     #     plotter.show()
-    return 0
-
-if __name__ == "__main__":
-    raise SystemExit(main())
