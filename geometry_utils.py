@@ -1,7 +1,5 @@
-import sys
-import argparse
-from pathlib import Path
 from typing import Optional
+import trimesh
 
 import pyvista as pv
 import numpy as np
@@ -13,6 +11,7 @@ from OCP.TopoDS import TopoDS_Shape, TopoDS_Face, TopoDS
 from OCP.BRepMesh import BRepMesh_IncrementalMesh
 from OCP.BRep import BRep_Tool
 from OCP.TopLoc import TopLoc_Location
+from OCP.StlAPI import StlAPI_Writer
 
 
 def pick_face_on_mesh(mesh: pv.PolyData):
@@ -61,15 +60,11 @@ def read_step_from_user(step_path):
         face = TopoDS.Face_s(exp.Current())
         faces_list.append(face)
         exp.Next()
-    print(f"Loaded STEP: {step_path}  ({len(faces_list)} faces)")
     return shape, faces_list
 
 
-def _build_face_mesh(shape, faces_list, mesh_deflection = 0.001, angular_deflection = 0.5):
-    """
-    Tessellate the shape and build a PyVista mesh with cell_data['face_id']
-    so that each triangle knows which B-rep face it came from.
-    """
+def _build_face_mesh(shape, faces_list, mesh_deflection = 0.01, angular_deflection = 0.5):
+
     mesh = BRepMesh_IncrementalMesh(shape, mesh_deflection, False, angular_deflection, True)
     mesh.Perform()
 
@@ -105,7 +100,7 @@ def _build_face_mesh(shape, faces_list, mesh_deflection = 0.001, angular_deflect
     return poly
 
 # Volume removal visualization
-def build_mesh_for_shape(shape, mesh_deflection= 0.001, angular_deflection = 0.5):
+def build_mesh_for_shape(shape, mesh_deflection= 0.01, angular_deflection = 0.5):
     # if we have faces list we can easily remove this function
     faces_list: list[TopoDS_Face] = []
     exp = TopExp_Explorer(shape, TopAbs_FACE)
@@ -121,7 +116,7 @@ def build_mesh_for_shape(shape, mesh_deflection= 0.001, angular_deflection = 0.5
     )
 
 
-def pick_brep_face( shape, faces_list, mesh_deflection = 0.001):
+def pick_brep_face(shape, faces_list, mesh_deflection = 0.01):
     mesh = _build_face_mesh(shape, faces_list, mesh_deflection=mesh_deflection)
     face_id, cell_id, _ = pick_face_on_mesh(mesh)
     return faces_list[face_id]
@@ -153,31 +148,51 @@ def save_shape_to_stl(
     shape: TopoDS_Shape,
     path: str,
     mesh_deflection: float = 0.001,
-    angular_deflection: float = 0.5,
-) -> None:
-    """Tessellate a TopoDS_Shape and save it as an STL file using OCC StlAPI."""
-    from OCP.BRepMesh import BRepMesh_IncrementalMesh
-    from OCP.StlAPI import StlAPI_Writer
-
+    angular_deflection: float = 0.5):
     BRepMesh_IncrementalMesh(shape, mesh_deflection, False, angular_deflection, True).Perform()
     writer = StlAPI_Writer()
-    writer.ASCIIMode = False   # binary STL
+    writer.ASCIIMode = False   
     writer.Write(shape, path)
     print(f"Saved STL: {path}")
 
 
 def step_to_stl(
-    step_path: str,
+    step_path,
     stl_path: Optional[str] = None,
     mesh_deflection: float = 0.1,
-    angular_deflection: float = 0.5,
-) -> str:
-
-    shape = load_step(step_path)
-    mesh = build_mesh_for_shape(shape,mesh_deflection=mesh_deflection,angular_deflection=angular_deflection)
-    out_path = Path(stl_path) if stl_path else Path(step_path).with_suffix(".stl")
-    mesh.triangulate().clean().save(str(out_path))
-    print(f"Saved STL: {out_path}")
+    angular_deflection: float = 0.5):
+    if isinstance(step_path, str):
+        shape = load_step(step_path)
+        out_path = Path(stl_path) if stl_path else Path(step_path).with_suffix(".stl")
+    else:
+        shape = step_path
+        out_path = Path(stl_path) if stl_path else Path("removal_prism.stl")
+    save_shape_to_stl(shape, str(out_path), mesh_deflection=mesh_deflection, angular_deflection=angular_deflection)
     return str(out_path)
+
+
+def _repair_mesh(mesh: trimesh.Trimesh, name: str) -> trimesh.Trimesh:
+    trimesh.repair.fix_winding(mesh)
+    trimesh.repair.fix_normals(mesh)
+    trimesh.repair.fill_holes(mesh)
+    if not mesh.is_watertight:
+        print(f"Warning: '{name}' mesh is still not watertight after repair — boolean may fail.")
+    return mesh
+
+
+# (stock - part) ∩ extrusion Mesh
+def build_feature_removal_volume(extrusion, stock, part, output_path: str = "feature_removal_volume.stl"):
+    feature_mesh = trimesh.load(extrusion)
+    stock_mesh   = trimesh.load(stock)
+    part_mesh    = trimesh.load(part)
+
+    feature_mesh = _repair_mesh(feature_mesh, "extrusion")
+    stock_mesh   = _repair_mesh(stock_mesh,   "stock")
+    part_mesh    = _repair_mesh(part_mesh,    "part")
+
+    to_be_removed = stock_mesh.difference(part_mesh)
+    result = feature_mesh.intersection(to_be_removed)
+    return result.export(output_path)
+
 
 

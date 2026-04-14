@@ -1,8 +1,3 @@
-"""
-B-rep face adjacency graph from a STEP file.
-Run: python graph.py --step /path/to/model.step
-
-"""
 from __future__ import annotations
 import argparse
 import math
@@ -41,7 +36,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pyvista as pv
 
-from config import read_step_from_user
+from geometry_utils import read_step_from_user
 SURFACE_TYPE_MAP = {
     GeomAbs_Plane: "Plane",
     GeomAbs_Cylinder: "Cylinder",
