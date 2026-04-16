@@ -10,32 +10,35 @@ from OCP.TopoDS import TopoDS_Shape, TopoDS
 from OCP.TopAbs import TopAbs_FACE, TopAbs_SHELL
 from OCP.TopExp import TopExp_Explorer
 from OCP.STEPControl import STEPControl_Writer, STEPControl_AsIs
-from OCP.BRepAlgoAPI import BRepAlgoAPI_Cut, BRepAlgoAPI_Common
+from OCP.BRepAlgoAPI import BRepAlgoAPI_Cut, BRepAlgoAPI_Common, BRepAlgoAPI_Fuse
 from OCP.BRepMesh import BRepMesh_IncrementalMesh
 from OCP.StlAPI import StlAPI_Writer
 from OCP.Bnd import Bnd_Box
 from OCP.BRepBndLib import BRepBndLib
 
-# Build a shell from feature faces and extrude it
+# Extrude every feature face, then union all extrusions into one body.
 def extrude_feature_patch(feature_faces, direction=(0,0,1), length=200):
-    sewing = BRepBuilderAPI_Sewing()
-    for f in feature_faces:
-        sewing.Add(f)
-    sewing.Perform()
-    shell = sewing.SewedShape()
-
     vec = gp_Vec(gp_Dir(direction[0], direction[1], direction[2]))
     vec.Multiply(length)
 
-     # BRepPrimAPI_MakePrism on an open shell produces a compound of faces
-    # (bottom + top + lateral walls) but does NOT sew them into a solid.
-    prism_shape = BRepPrimAPI_MakePrism(shell, vec).Shape()
+    if not feature_faces:
+        raise ValueError("No feature faces provided for extrusion.")
 
-   
-    # Re-sew all faces and attempt to build a solid so that downstream boolean
-    # operations (trimesh or OCC) receive a proper closed volume.
+    # Build one prism per face, then fuse all prisms. This is more robust when
+    # the detected feature contains multiple faces/disconnected islands.
+    fused_extrusion = BRepPrimAPI_MakePrism(feature_faces[0], vec).Shape()
+    for face in feature_faces[1:]:
+        prism = BRepPrimAPI_MakePrism(face, vec).Shape()
+        fuse_op = BRepAlgoAPI_Fuse(fused_extrusion, prism)
+        fuse_op.Build()
+        if not fuse_op.IsDone():
+            raise RuntimeError("Boolean union between extruded feature faces failed.")
+        fused_extrusion = fuse_op.Shape()
+
+    # Re-sew all faces and attempt to build a solid so downstream booleans
+    # receive a closed volume whenever possible.
     re_sew = BRepBuilderAPI_Sewing(1e-3)
-    face_exp = TopExp_Explorer(prism_shape, TopAbs_FACE)
+    face_exp = TopExp_Explorer(fused_extrusion, TopAbs_FACE)
     while face_exp.More():
         re_sew.Add(face_exp.Current())
         face_exp.Next()
@@ -53,16 +56,12 @@ def extrude_feature_patch(feature_faces, direction=(0,0,1), length=200):
     if added and solid_builder.IsDone():
         return solid_builder.Solid()
 
-    # Fallback: the patch boundary is open (feature faces don't form a closed
-    # perimeter), so the prism cannot be sealed automatically.  Return the
-    # compound and let the caller decide (repair or switch to bbox approach).
+    # Fallback: keep the fused extrusion even if it cannot be closed as a solid.
     print(
-        "Warning: extrusion prism is an open shell — its boundary edges are not "
-        "closed because the selected feature patch has free perimeter edges. "
-        "Boolean operations may fail. Consider using the bounding-box approach "
-        "(remove_feature_bbox) or the BREP pipeline (compute_feature_removal_volume)."
+        "Warning: fused feature extrusion is not a closed solid. "
+        "Boolean operations may be less reliable."
     )
-    return prism_shape
+    return fused_extrusion
 
 # BREP to PyVista mesh
 def _shape_to_pyvista(shape: TopoDS_Shape, mesh_deflection: float = 0.1) -> pv.PolyData:
@@ -125,7 +124,7 @@ def visualize_feature_removal_volume(removal_volume, final_removal, part_shape):
         plotter.add_mesh(fr_mesh, color="tomato", opacity=0.8)
     else:
         plotter.add_mesh(rv_mesh, color="gray", opacity=0.8)
-    plotter.add_mesh(part_mesh, color="blue", opacity=0.8)
+    plotter.add_mesh(part_mesh, color="gray", opacity=0.8)
     plotter.show()
 
 def get_extrusion_length(stock_shape, direction):
