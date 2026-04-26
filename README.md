@@ -76,9 +76,6 @@ STEP Files (part + stock)
 git clone https://github.com/autonomiq-dev/Free-form-Feature-Detection.git
 cd Free-form-Feature-Detection-Extraction
 
-python -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
-
 pip install ocp numpy pyvista networkx trimesh matplotlib
 ```
 
