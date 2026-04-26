@@ -55,11 +55,11 @@ removal_prism = extrude_feature_patch(
     length=extrusion_length,          # large enough to reach stock top
 )
 
-# # Visualize the extrusion if needed (turn it to a function for visualize extrusion mesh) 
-# feature_mesh = build_mesh_for_shape(removal_prism, mesh_deflection=0.001)
-# plotter = pv.Plotter()
-# plotter.add_mesh(feature_mesh, color="gray")
-# plotter.show()
+# Visualize the extrusion if needed (turn it to a function for visualize extrusion mesh) 
+feature_mesh = build_mesh_for_shape(removal_prism, mesh_deflection=0.001)
+plotter = pv.Plotter()
+plotter.add_mesh(feature_mesh, color="gray")
+plotter.show()
 
 # Compute the true feature removal volume BREP:
 # stock ∩ removal_prism
