@@ -41,9 +41,8 @@ def extrude_feature_patch(feature_faces, direction=(0, 0, 1), length=200):
     fixer.Perform()
     shell = fixer.Shape()
 
-    vec = gp_Vec(direction[0], direction[1], direction[2])
-    vec.Multiply(length)
-
+    dx, dy, dz = direction
+    vec = gp_Vec(dx * length, dy * length, dz * length)
     return BRepPrimAPI_MakePrism(shell, vec).Shape()
 
 
@@ -116,15 +115,14 @@ def compute_feature_removal_volume(
     return common_op.Shape()
 
 
-def visualize_feature_removal_volume(removal_volume, final_removal, part_shape):
-    rv_mesh = _shape_to_pyvista(removal_volume)
-    fr_mesh = _shape_to_pyvista(final_removal)
+def visualize_feature_removal_volume(removal_prism, feature_removal, part_shape):
+    fr_mesh = _shape_to_pyvista(feature_removal)
     part_mesh = _shape_to_pyvista(part_shape)
     plotter = pv.Plotter(border=False, title="Feature Removal Volume")
     if fr_mesh.n_points > 0:
         plotter.add_mesh(fr_mesh, color="tomato", opacity=0.8)
     else:
-        plotter.add_mesh(rv_mesh, color="gray", opacity=0.8)
+        plotter.add_mesh(_shape_to_pyvista(removal_prism), color="gray", opacity=0.8)
     plotter.add_mesh(part_mesh, color="gray", opacity=0.8)
     plotter.show()
 
