@@ -1,8 +1,8 @@
 from typing import Optional
 import trimesh
-
 import pyvista as pv
 import numpy as np
+from pathlib import Path
 
 from OCP.STEPControl import STEPControl_Reader, STEPControl_Writer, STEPControl_AsIs
 from OCP.TopExp import TopExp_Explorer

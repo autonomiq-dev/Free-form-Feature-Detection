@@ -1,5 +1,6 @@
 import numpy as np
 import pyvista as pv
+
 from OCP.BRep import BRep_Tool
 from OCP.BRepBuilderAPI import BRepBuilderAPI_Sewing
 from OCP.BRepPrimAPI import BRepPrimAPI_MakePrism
@@ -9,12 +10,11 @@ from OCP.TopLoc import TopLoc_Location
 from OCP.TopoDS import TopoDS_Shape, TopoDS
 from OCP.TopAbs import TopAbs_FACE, TopAbs_SHELL
 from OCP.TopExp import TopExp_Explorer
-from OCP.STEPControl import STEPControl_Writer, STEPControl_AsIs
-from OCP.BRepAlgoAPI import BRepAlgoAPI_Cut, BRepAlgoAPI_Common, BRepAlgoAPI_Fuse
+from OCP.BRepAlgoAPI import BRepAlgoAPI_Common, BRepAlgoAPI_Fuse
 from OCP.BRepMesh import BRepMesh_IncrementalMesh
-from OCP.StlAPI import StlAPI_Writer
 from OCP.Bnd import Bnd_Box
 from OCP.BRepBndLib import BRepBndLib
+
 
 # Extrude every feature face, then union all extrusions into one body.
 def extrude_feature_patch(feature_faces, direction=(0,0,1), length=200):
@@ -24,8 +24,8 @@ def extrude_feature_patch(feature_faces, direction=(0,0,1), length=200):
     if not feature_faces:
         raise ValueError("No feature faces provided for extrusion.")
 
-    # Build one prism per face, then fuse all prisms. This is more robust when
-    # the detected feature contains multiple faces/disconnected islands.
+    # Build one prism per face, then fuse all prisms. 
+    # This is more robust when the detected feature contains multiple faces.
     fused_extrusion = BRepPrimAPI_MakePrism(feature_faces[0], vec).Shape()
     for face in feature_faces[1:]:
         prism = BRepPrimAPI_MakePrism(face, vec).Shape()
@@ -63,6 +63,7 @@ def extrude_feature_patch(feature_faces, direction=(0,0,1), length=200):
     )
     return fused_extrusion
 
+
 # BREP to PyVista mesh
 def _shape_to_pyvista(shape: TopoDS_Shape, mesh_deflection: float = 0.1) -> pv.PolyData:
     BRepMesh_IncrementalMesh(shape, mesh_deflection).Perform()
@@ -92,27 +93,16 @@ def _shape_to_pyvista(shape: TopoDS_Shape, mesh_deflection: float = 0.1) -> pv.P
 
 def compute_feature_removal_volume(
     stock_shape: TopoDS_Shape,
-    part_shape: TopoDS_Shape,
     extrusion: TopoDS_Shape
 ):
-    # # 1) Compute removal volume: stock minus part.
-    # cut_op = BRepAlgoAPI_Cut(stock_shape, part_shape)
-    # cut_op.Build()
-    # if not cut_op.IsDone():
-    #     raise RuntimeError(
-    #         "Boolean cut (stock minus part) failed; check that both shapes are valid solids."
-    #     )
-    # removal_volume = cut_op.Shape()
-
-    # 2) Intersect in-process stock with the feature volume.
+    # Intersect in-process stock with the feature volume.
     common_op = BRepAlgoAPI_Common(stock_shape, extrusion)
     common_op.Build()
-    # if not common_op.IsDone():
-    #     raise RuntimeError(
-    #         "Boolean common between Stock and removal feature failed; check input shapes."
-    #     )
+    if not common_op.IsDone():
+        raise RuntimeError(
+            "Boolean common between Stock and removal feature failed; check input shapes."
+        )
     final_removal = common_op.Shape()
-
     return final_removal
 
 def visualize_feature_removal_volume(removal_volume, final_removal, part_shape):
@@ -131,6 +121,7 @@ def get_extrusion_length(stock_shape, direction):
     stock_bbox = Bnd_Box()
     BRepBndLib.Add_s(stock_shape, stock_bbox)
     xmin_stock, ymin_stock, zmin_stock, xmax_stock, ymax_stock, zmax_stock = stock_bbox.Get()
+    
     if direction == (0,0,1) or direction == (0,0,-1):
         return zmax_stock - zmin_stock
     elif direction == (0,1,0) or direction == (0,-1,0):
@@ -139,3 +130,7 @@ def get_extrusion_length(stock_shape, direction):
         return xmax_stock - xmin_stock
     else:
         raise ValueError(f"Invalid direction: {direction}")
+
+
+# remove the orthorgonal faces to the machining direction from the feature removal volume --> then it will be a valid feature removal volume
+# check the boolean opration implementation

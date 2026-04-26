@@ -3,6 +3,11 @@ import argparse
 import math
 import sys
 from typing import Any
+import networkx as nx
+import matplotlib.pyplot as plt
+import numpy as np
+import pyvista as pv
+
 from OCP.STEPControl import STEPControl_Reader
 from OCP.TopExp import TopExp_Explorer
 from OCP.TopAbs import TopAbs_FACE, TopAbs_EDGE, TopAbs_VERTEX
@@ -31,12 +36,9 @@ from OCP.BRepGProp import BRepGProp
 from OCP.BRepMesh import BRepMesh_IncrementalMesh
 from OCP.TopLoc import TopLoc_Location
 from OCP.TopAbs import TopAbs_Orientation
-import networkx as nx
-import matplotlib.pyplot as plt
-import numpy as np
-import pyvista as pv
 
 from geometry_utils import read_step_from_user
+
 SURFACE_TYPE_MAP = {
     GeomAbs_Plane: "Plane",
     GeomAbs_Cylinder: "Cylinder",
@@ -98,6 +100,8 @@ def _surface_type_for_face(face: TopoDS_Face):
     stype = adaptor.GetType()
     return SURFACE_TYPE_MAP.get(stype, f"Other({stype})")
 
+
+# make multiple functions for the graph building process !!!!!!!!!!!!!
 def build_face_adjacency(faces_list):
     # edge_key -> list of face_ids incident to that edge
     edge_to_faces: dict[int, list[int]] = {}
@@ -231,7 +235,7 @@ def compute_face_normal(face: TopoDS_Face) -> tuple[float, float, float]:
 
     return (float("nan"), float("nan"), float("nan"))
 
-
+# delete this function
 def compute_face_curvature(face: TopoDS_Face) -> dict[str, float]:
     """Compute principal, mean, and Gaussian curvature for a face.
 
